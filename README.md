@@ -13,7 +13,12 @@ Tensorflow implementation of realistic fingerprint generator based on DCGAN [Dee
 - [pillow](https://github.com/python-pillow/Pillow)
 
 #### For training:
-- NIST Special Database 14.
+- Download NIST Special Database 14.
+- Move to "./data" folder
+
+#### For testing:
+- Download [Pre trained model](https://drive.google.com/open?id=1f1UN0igkgq8FUi-vQBCbOS1WT0av7-Vp)
+- Extract checkpoint folder to the main root (under "-Realistic-Fingerprint-Generator").
 
 ## Usage
 
