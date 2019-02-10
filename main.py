@@ -11,12 +11,15 @@ flags = tf.app.flags
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_string("data_dir", "./data", "Root directory of dataset [data]")
 flags.DEFINE_string("sample_dir", "samples", "Directory name to save the image samples [samples]")
-flags.DEFINE_string("summary_steps", 100, "write to summery file each summary_steps steps")
-flags.DEFINE_string("eval_steps", 100, "run evaluation each eval_steps steps")
-flags.DEFINE_string("save_ckpt_steps", 100, "save checkpoint file each save_ckpt_steps steps")
+flags.DEFINE_integer("summary_steps", 100, "write to summery file each summary_steps steps")
+flags.DEFINE_integer("eval_steps", 100, "run evaluation each eval_steps steps")
+flags.DEFINE_integer("save_ckpt_steps", 100, "save checkpoint file each save_ckpt_steps steps")
 # Data
-flags.DEFINE_string("dataset", "nist14", "The name of dataset [nist14, FVC]")
+flags.DEFINE_string("dataset", "NIST14", "The name of dataset [NIST14, FVC]")
+flags.DEFINE_string("dataset_images", "Fimages", "The name of dataset [Fimages, Rimages]")
+flags.DEFINE_string("dataset_labels", "Fiso", "The name of dataset [Fiso, Riso]")
 flags.DEFINE_string("input_fname_pattern", "*.jpg", "Glob pattern of filename of input images [*]")
+flags.DEFINE_string("labels_fname_pattern", "*.txt", "Glob pattern of filename of input images [*]")
 flags.DEFINE_integer("input_height", 650, "The size of image to use (will be center cropped). [108]")
 flags.DEFINE_integer("input_width", None,
                      "The size of image to use (will be center cropped). If None, same value as input_height [None]")
@@ -32,6 +35,7 @@ flags.DEFINE_integer("generate_test_images", 100, "Number of images to generate 
 flags.DEFINE_integer("epoch", 25, "Epoch to train [25]")
 flags.DEFINE_float("learning_rate", 0.0002, "Learning rate of for adam [0.0002]")
 flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
+flags.DEFINE_float("lamda", 10., "Weight for l2 loss")
 flags.DEFINE_float("train_size", np.inf, "The size of train images [np.inf]")
 flags.DEFINE_integer("batch_size", 4, "The size of batch images [64]")
 FLAGS = flags.FLAGS
@@ -44,6 +48,10 @@ def main(_):
         FLAGS.input_width = FLAGS.input_height
     if FLAGS.output_width is None:
         FLAGS.output_width = FLAGS.output_height
+    if FLAGS.train:
+        load_samples_mode = 'validation'
+    else:
+        load_samples_mode = 'test'
 
     if not os.path.exists(FLAGS.checkpoint_dir):
         os.makedirs(FLAGS.checkpoint_dir)
@@ -51,7 +59,8 @@ def main(_):
         os.makedirs(FLAGS.sample_dir)
 
     run_config = tf.ConfigProto()
-    run_config.gpu_options.allow_growth = True
+    # run_config.gpu_options.allow_growth = True
+    run_config.gpu_options.per_process_gpu_memory_fraction = 0.5
 
     with tf.Session(config=run_config) as sess:
         dcgan = DCGAN(
@@ -64,18 +73,22 @@ def main(_):
             sample_num=FLAGS.batch_size,
             z_dim=FLAGS.generate_test_images,
             dataset_name=FLAGS.dataset,
+            dataset_images_name=FLAGS.dataset_images,
+            dataset_labels_name=FLAGS.dataset_labels,
             input_fname_pattern=FLAGS.input_fname_pattern,
+            labels_fname_pattern=FLAGS.labels_fname_pattern,
             crop=FLAGS.crop,
             checkpoint_dir=FLAGS.checkpoint_dir,
-            sample_dir=FLAGS.sample_dir,
-            data_dir=FLAGS.data_dir)
+            data_dir=FLAGS.data_dir,
+            load_samples_mode=load_samples_mode,
+            lamda=FLAGS.lamda)
 
         show_all_variables()
 
         if FLAGS.train:
             dcgan.train(FLAGS)
         else:
-            if not dcgan.load(FLAGS.checkpoint_dir)[0]:
+            if not dcgan.load(FLAGS.checkpoint_dir):
                 raise Exception("[!] Train a model first, then run test mode")
 
         # visualization code run both in train/test mode.

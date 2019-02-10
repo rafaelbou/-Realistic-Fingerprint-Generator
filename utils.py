@@ -29,9 +29,13 @@ def save_images(images, size, image_path):
     return imsave(inverse_transform(images), size, image_path)
 
 
-def save_images_onebyone(images, image_path):
+def save_images_onebyone(images, image_path, maps=None, original_imgs=None):
     images = np.squeeze(inverse_transform(images))
     for i, img in enumerate(images):
+        if maps is not None:
+            mnt_img = maps[i] + img[:, :, np.newaxis]
+            scipy.misc.imsave(image_path + "_{}_mnt.png".format(i), mnt_img)
+            scipy.misc.imsave(image_path + "_{}_original.png".format(i), np.squeeze(original_imgs[i]))
         scipy.misc.imsave(image_path + "_{}.png".format(i), img)
 
 
@@ -80,9 +84,17 @@ def imsave(images, size, path):
 def visualize(sess, dcgan, config):
     for idx in xrange(config.generate_test_images):
         print(" [*] %d" % idx)
-        z_sample = np.random.uniform(-1, 1, size=(config.batch_size, dcgan.z_dim))
-        samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample})
-        save_images_onebyone(samples, './samples/test_{}'.format(idx))
+        if dcgan.use_maps:
+            sample_inputs, sample_z, sample_maps = dcgan.sample_inputs_and_z()
+        else:
+            sample_inputs, sample_z = dcgan.sample_inputs_and_z()
+        # sample_z = np.random.uniform(-1, 1, size=(config.batch_size, dcgan.z_dim))
+        if dcgan.use_maps:
+            samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: sample_z, dcgan.maps: sample_maps})
+            save_images_onebyone(samples, './samples/test_{}'.format(idx), sample_maps, sample_inputs)
+        else:
+            samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: sample_z})
+            save_images_onebyone(samples, './samples/test_{}'.format(idx))
 
 
 def image_manifold_size(num_images):
