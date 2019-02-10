@@ -18,8 +18,11 @@ flags.DEFINE_integer("save_ckpt_steps", 100, "save checkpoint file each save_ckp
 flags.DEFINE_string("dataset", "NIST14", "The name of dataset [NIST14, FVC]")
 flags.DEFINE_string("dataset_images", "Fimages", "The name of dataset [Fimages, Rimages]")
 flags.DEFINE_string("dataset_labels", "Fiso", "The name of dataset [Fiso, Riso]")
+flags.DEFINE_string("dataset_masks", "Fmasks", "The name of dataset [Fmasks, Rmasks]")
 flags.DEFINE_string("input_fname_pattern", "*.jpg", "Glob pattern of filename of input images [*]")
-flags.DEFINE_string("labels_fname_pattern", "*.txt", "Glob pattern of filename of input images [*]")
+flags.DEFINE_string("labels_fname_pattern", "*.txt", "Glob pattern of filename of minute files [*]")
+flags.DEFINE_string("masks_fname_pattern", "*.png", "Glob pattern of filename of fingerprint mask images [*]")
+# Pre process
 flags.DEFINE_integer("input_height", 650, "The size of image to use (will be center cropped). [108]")
 flags.DEFINE_integer("input_width", None,
                      "The size of image to use (will be center cropped). If None, same value as input_height [None]")
@@ -27,9 +30,11 @@ flags.DEFINE_integer("output_height", 650, "The size of the output images to pro
 flags.DEFINE_integer("output_width", None,
                      "The size of the output images to produce. If None, same value as output_height [None]")
 flags.DEFINE_boolean("crop", True, "True for training, False for testing [False]")
+flags.DEFINE_boolean("use_masks", False, "Use fingerprint segmentation mask for fingerprint pre process")
 # Mode
 flags.DEFINE_boolean("train", False, "True for training, False for testing [False]")
 flags.DEFINE_boolean("visualize", False, "True for visualizing, False for nothing [False]")
+flags.DEFINE_boolean("use_maps", True, "Use minute maps for fingerprint creation")
 flags.DEFINE_integer("generate_test_images", 100, "Number of images to generate during test. [100]")
 # Hyper-params
 flags.DEFINE_integer("epoch", 25, "Epoch to train [25]")
@@ -75,13 +80,17 @@ def main(_):
             dataset_name=FLAGS.dataset,
             dataset_images_name=FLAGS.dataset_images,
             dataset_labels_name=FLAGS.dataset_labels,
+            dataset_masks_name=FLAGS.dataset_masks,
             input_fname_pattern=FLAGS.input_fname_pattern,
             labels_fname_pattern=FLAGS.labels_fname_pattern,
+            masks_fname_pattern=FLAGS.masks_fname_pattern,
             crop=FLAGS.crop,
             checkpoint_dir=FLAGS.checkpoint_dir,
             data_dir=FLAGS.data_dir,
             load_samples_mode=load_samples_mode,
-            lamda=FLAGS.lamda)
+            lamda=FLAGS.lamda,
+            use_maps_flag=FLAGS.use_maps,
+            use_mask_flag=FLAGS.use_masks)
 
         show_all_variables()
 

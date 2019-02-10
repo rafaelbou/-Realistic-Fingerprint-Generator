@@ -10,7 +10,7 @@ from six.moves import xrange
 from ops import *
 from utils import *
 from pre_process import *
-from objectives import sigmoid_cross_entropy_with_logits, l2_loss, l2_loss_weighted
+from objectives import sigmoid_cross_entropy_with_logits, l2_loss_weighted
 
 
 def conv_out_size_same(size, stride):
@@ -20,9 +20,10 @@ def conv_out_size_same(size, stride):
 class DCGAN(object):
     def __init__(self, sess, input_height=650, input_width=650, crop=True,
                  batch_size=4, sample_num=64, output_height=650, output_width=650,
-                 z_dim=100, maps_dim=3, use_maps_flag=True, gen_input_layer_depth=64, disc_input_layer_depth=64,
-                 gen_fc_size=1024, disc_fc_size=1024, dataset_name='default', dataset_images_name='default',
-                 dataset_labels_name='default',input_fname_pattern='*.jpg', labels_fname_pattern='*.txt',
+                 z_dim=100, maps_dim=3, use_maps_flag=True, use_mask_flag=False, gen_input_layer_depth=64,
+                 disc_input_layer_depth=64, gen_fc_size=1024, disc_fc_size=1024, dataset_name='default',
+                 dataset_images_name='default', dataset_labels_name='default', dataset_masks_name='default',
+                 input_fname_pattern='*.jpg', labels_fname_pattern='*.txt', masks_fname_pattern='*.png',
                  checkpoint_dir=None, data_dir='./data', load_samples_mode='validation', lamda=100.):
         """
         Args:
@@ -47,6 +48,7 @@ class DCGAN(object):
         self.z_dim = z_dim
         self.maps_dim = maps_dim
         self.use_maps = use_maps_flag
+        self.use_mask = use_mask_flag
         self.gen_input_layer_depth = gen_input_layer_depth
         self.disc_input_layer_depth = disc_input_layer_depth
         self.gen_fc_size = gen_fc_size
@@ -64,8 +66,10 @@ class DCGAN(object):
         self.dataset_name = dataset_name
         self.dataset_images_name = dataset_images_name
         self.dataset_labels_name = dataset_labels_name
+        self.dataset_masks_name = dataset_masks_name
         self.input_fname_pattern = input_fname_pattern
         self.labels_fname_pattern = labels_fname_pattern
+        self.masks_fname_pattern = masks_fname_pattern
         self.checkpoint_dir = checkpoint_dir
         self.data_dir = data_dir
         self.load_samples_mode = load_samples_mode
@@ -132,7 +136,7 @@ class DCGAN(object):
         self.d_loss = self.d_loss_real + self.d_loss_fake
         if self.use_maps:
             weights = tf.expand_dims(tf.math.add(tf.math.add(self.maps[:, :, :, 0], self.maps[:, :, :, 1]) * 100,
-                                  self.maps[:, :, :, 2] * 1000), axis=-1)
+                                                 self.maps[:, :, :, 2] * 1000), axis=-1)
             self.l2_g_loss = l2_loss_weighted(self.G, inputs, tf.math.add(weights, tf.ones_like(weights)))
             self.g_loss = self.g_loss + self.lamda * self.l2_g_loss
 
@@ -196,6 +200,12 @@ class DCGAN(object):
 
             for idx in xrange(0, int(batch_idxs)):
                 batch_files = self.data[idx * config.batch_size:(idx + 1) * config.batch_size]
+                if self.use_mask:
+                    masks = [batch_file.replace(self.dataset_images_name, self.dataset_masks_name)
+                                 .replace(self.input_fname_pattern[1:], self.masks_fname_pattern[1:])
+                             for batch_file in batch_files]
+                else:
+                    masks = [None for _ in batch_files]
                 batch = [
                     get_image(batch_file,
                               input_height=self.input_height,
@@ -203,7 +213,8 @@ class DCGAN(object):
                               resize_height=self.output_height,
                               resize_width=self.output_width,
                               crop=self.crop,
-                              grayscale=self.grayscale) for batch_file in batch_files]
+                              grayscale=self.grayscale,
+                              mask=masks[batch_idx]) for batch_idx, batch_file in enumerate(batch_files)]
                 if self.use_maps:
                     batch_maps = [
                         get_label(batch_file.replace(self.dataset_images_name, self.dataset_labels_name)
@@ -212,7 +223,8 @@ class DCGAN(object):
                                   input_width=self.input_width,
                                   resize_height=self.output_height,
                                   resize_width=self.output_width,
-                                  crop=self.crop) for batch_file in batch_files]
+                                  crop=self.crop,
+                                  mask=masks[batch_idx]) for batch_idx, batch_file in enumerate(batch_files)]
                 if self.grayscale:
                     batch_images = np.array(batch).astype(np.float32)[:, :, :, None]
                 else:
@@ -304,6 +316,12 @@ class DCGAN(object):
     def sample_inputs_and_z(self):
         sample_z = np.random.uniform(-1, 1, size=(self.sample_num, self.z_dim))
         sample_files = self.data[0:self.sample_num]
+        if self.use_mask:
+            masks = [sample_file.replace(self.dataset_images_name, self.dataset_masks_name)
+                         .replace(self.input_fname_pattern[1:], self.masks_fname_pattern[1:])
+                     for sample_file in sample_files]
+        else:
+            masks = [None for _ in sample_files]
         sample = [
             get_image(sample_file,
                       input_height=self.input_height,
@@ -311,7 +329,8 @@ class DCGAN(object):
                       resize_height=self.output_height,
                       resize_width=self.output_width,
                       crop=self.crop,
-                      grayscale=self.grayscale) for sample_file in sample_files]
+                      grayscale=self.grayscale,
+                      mask=masks[sample_idx]) for sample_idx, sample_file in enumerate(sample_files)]
         if self.use_maps:
             sample_maps = [
                 get_label(sample_file.replace(self.dataset_images_name, self.dataset_labels_name)
@@ -320,7 +339,8 @@ class DCGAN(object):
                           input_width=self.input_width,
                           resize_height=self.output_height,
                           resize_width=self.output_width,
-                          crop=self.crop) for sample_file in sample_files]
+                          crop=self.crop,
+                          mask=masks[sample_idx]) for sample_idx, sample_file in enumerate(sample_files)]
         if self.grayscale:
             sample_inputs = np.array(sample).astype(np.float32)[:, :, :, None]
         else:
