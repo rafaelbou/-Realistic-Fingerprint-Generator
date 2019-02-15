@@ -16,6 +16,7 @@ def l2_loss(generated, real, weights=1.):
 def l2_loss_weighted(generated, real, weights=1.):
     return tf.losses.mean_squared_error(tf.multiply(real, weights), tf.multiply(generated, weights))
 
+
 def unittest():
     generated = tf.placeholder(tf.float64, [None,10,10])
     real = tf.placeholder(tf.float64, [None,10,10])

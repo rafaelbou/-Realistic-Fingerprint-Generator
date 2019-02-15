@@ -10,21 +10,20 @@ from six.moves import xrange
 from ops import *
 from utils import *
 from pre_process import *
+from nets.generators import generator_factory
+from nets.discriminators import discriminator_factory
 from objectives import sigmoid_cross_entropy_with_logits, l2_loss_weighted
-
-
-def conv_out_size_same(size, stride):
-    return int(math.ceil(float(size) / float(stride)))
 
 
 class DCGAN(object):
     def __init__(self, sess, input_height=650, input_width=650, crop=True,
                  batch_size=4, sample_num=64, output_height=650, output_width=650,
-                 z_dim=100, maps_dim=3, use_maps_flag=True, use_mask_flag=False, gen_input_layer_depth=64,
-                 disc_input_layer_depth=64, gen_fc_size=1024, disc_fc_size=1024, dataset_name='default',
+                 z_dim=100, maps_dim=3, use_maps_flag=True, use_mask_flag=False, gen_input_layer_depth=8,
+                 disc_input_layer_depth=8, gen_fc_size=1024, disc_fc_size=1024, dataset_name='default',
                  dataset_images_name='default', dataset_labels_name='default', dataset_masks_name='default',
                  input_fname_pattern='*.jpg', labels_fname_pattern='*.txt', masks_fname_pattern='*.png',
-                 checkpoint_dir=None, data_dir='./data', load_samples_mode='validation', lamda=100.):
+                 checkpoint_dir=None, data_dir='./data', load_samples_mode='validation', lamda=100.,
+                 generator_model_name="encoder_decoder"):
         """
         Args:
           sess: TensorFlow session
@@ -58,10 +57,15 @@ class DCGAN(object):
         self.d_bn1 = batch_norm(name='d_bn1')
         self.d_bn2 = batch_norm(name='d_bn2')
         self.d_bn3 = batch_norm(name='d_bn3')
+        self.d_bn4 = batch_norm(name='d_bn4')
+        self.d_bn5 = batch_norm(name='d_bn5')
+        self.g_bnz = batch_norm(name='g_bnz')
         self.g_bn0 = batch_norm(name='g_bn0')
         self.g_bn1 = batch_norm(name='g_bn1')
         self.g_bn2 = batch_norm(name='g_bn2')
         self.g_bn3 = batch_norm(name='g_bn3')
+        self.g_bn4 = batch_norm(name='g_bn4')
+        self.g_bn5 = batch_norm(name='g_bn5')
         # IO
         self.dataset_name = dataset_name
         self.dataset_images_name = dataset_images_name
@@ -73,9 +77,11 @@ class DCGAN(object):
         self.checkpoint_dir = checkpoint_dir
         self.data_dir = data_dir
         self.load_samples_mode = load_samples_mode
+        self.save_inputs = True
         # Read dataset files
         self.read_dataset_files()
         # Build model
+        self.generator_model_name = generator_model_name
         self.build_model()
 
     def read_dataset_files(self):
@@ -113,19 +119,19 @@ class DCGAN(object):
             tf.float32, [None, self.z_dim], name='z')
         if self.use_maps:
             self.maps = tf.placeholder(
-                tf.float32, [None, self.output_height, self.output_width, self.maps_dim], name='maps')
+                tf.float32, [self.batch_size, self.output_height, self.output_width, self.maps_dim], name='maps')
 
         # build model
         if self.use_maps:
-            self.G = self.generator(self.z, self.maps)
+            self.G = generator_factory(self, self.z, self.maps, generator_name=self.generator_model_name)
         else:
-            self.G = self.generator(self.z)
-        self.D, self.D_logits = self.discriminator(inputs, reuse=False)
+            self.G = generator_factory(self, self.z, generator_name='decoder')
+        self.D, self.D_logits = discriminator_factory(self, inputs, reuse=False)
         if self.use_maps:
-            self.sampler = self.sampler(self.z, self.maps)
+            self.sampler = generator_factory(self, self.z, self.maps, reuse=True, generator_name=self.generator_model_name)
         else:
-            self.sampler = self.sampler(self.z)
-        self.D_, self.D_logits_ = self.discriminator(self.G, reuse=True)
+            self.sampler = generator_factory(self, self.z, reuse=True, generator_name='decoder')
+        self.D_, self.D_logits_ = discriminator_factory(self, self.G, reuse=True)
 
         self.d_loss_real = tf.reduce_mean(
             sigmoid_cross_entropy_with_logits(self.D_logits, tf.ones_like(self.D)))
@@ -135,8 +141,8 @@ class DCGAN(object):
             sigmoid_cross_entropy_with_logits(self.D_logits_, tf.ones_like(self.D_)))
         self.d_loss = self.d_loss_real + self.d_loss_fake
         if self.use_maps:
-            weights = tf.expand_dims(tf.math.add(tf.math.add(self.maps[:, :, :, 0], self.maps[:, :, :, 1]) * 100,
-                                                 self.maps[:, :, :, 2] * 1000), axis=-1)
+            weights = tf.expand_dims(tf.math.add(tf.math.add(self.maps[:, :, :, 0], self.maps[:, :, :, 1]) * 10,
+                                                 self.maps[:, :, :, 2] * 100), axis=-1)
             self.l2_g_loss = l2_loss_weighted(self.G, inputs, tf.math.add(weights, tf.ones_like(weights)))
             self.g_loss = self.g_loss + self.lamda * self.l2_g_loss
 
@@ -305,8 +311,14 @@ class DCGAN(object):
                             self.inputs: sample_inputs,
                         },
                     )
+                if self.save_inputs:
+                    save_images(sample_inputs, image_manifold_size(samples.shape[0]),
+                                './{}/inputs.png'.format(config.sample_dir, epoch, idx))
+                    self.save_inputs = False
+                if not self.use_maps:
+                    sample_maps = None
                 save_images(samples, image_manifold_size(samples.shape[0]),
-                            './{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
+                            './{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx), maps=sample_maps)
                 print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss))
             except:
                 print("one pic error!...")
@@ -356,102 +368,6 @@ class DCGAN(object):
         g_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
             .minimize(self.g_loss, var_list=self.g_vars)
         return d_optim, g_optim
-
-    def discriminator(self, image, reuse=False):
-        with tf.variable_scope("discriminator") as scope:
-            if reuse:
-                scope.reuse_variables()
-
-            h0 = lrelu(conv2d(image, self.disc_input_layer_depth, name='d_h0_conv'))
-            h1 = lrelu(self.d_bn1(conv2d(h0, self.disc_input_layer_depth * 2, name='d_h1_conv')))
-            h2 = lrelu(self.d_bn2(conv2d(h1, self.disc_input_layer_depth * 4, name='d_h2_conv')))
-            h3 = lrelu(self.d_bn3(conv2d(h2, self.disc_input_layer_depth * 8, name='d_h3_conv')))
-            h4 = linear(tf.reshape(h3, [self.batch_size, -1]), 1, 'd_h4_lin')
-
-            return tf.nn.sigmoid(h4), h4
-
-    def generator(self, z, maps=None):
-        with tf.variable_scope("generator") as scope:
-            s_h, s_w = self.output_height, self.output_width
-            s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
-            s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
-            s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
-            s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
-
-            # project `z` and reshape
-            self.z_, self.h0_w, self.h0_b = linear(
-                z, self.gen_input_layer_depth * 8 * s_h16 * s_w16, 'g_h0_lin', with_w=True)
-
-            self.h0 = tf.reshape(
-                self.z_, [-1, s_h16, s_w16, self.gen_input_layer_depth * 8])
-            h0 = tf.nn.relu(self.g_bn0(self.h0))
-
-            self.h1, self.h1_w, self.h1_b = deconv2d(
-                h0, [self.batch_size, s_h8, s_w8, self.gen_input_layer_depth * 4], name='g_h1', with_w=True)
-            h1 = tf.nn.relu(self.g_bn1(self.h1))
-
-            h2, self.h2_w, self.h2_b = deconv2d(
-                h1, [self.batch_size, s_h4, s_w4, self.gen_input_layer_depth * 2], name='g_h2', with_w=True)
-            h2 = tf.nn.relu(self.g_bn2(h2))
-
-            h3, self.h3_w, self.h3_b = deconv2d(
-                h2, [self.batch_size, s_h2, s_w2, self.gen_input_layer_depth * 1], name='g_h3', with_w=True)
-            h3 = tf.nn.relu(self.g_bn3(h3))
-
-            if self.use_maps:
-                h4, self.h4_w, self.h4_b = deconv2d(
-                    h3, [self.batch_size, s_h, s_w, int(self.gen_input_layer_depth * 0.5)], name='g_h4', with_w=True)
-                h4 = tf.nn.relu(h4)
-                h4 = tf.concat([h4, maps], axis=-1)
-
-                h5 = conv2d(
-                    h4, self.c_dim, k_h=3, k_w=3, d_h=1, d_w=1, name='g_h5')
-                return tf.nn.tanh(h5)
-
-            h4, self.h4_w, self.h4_b = deconv2d(
-                h3, [self.batch_size, s_h, s_w, self.c_dim], name='g_h4', with_w=True)
-
-            return tf.nn.tanh(h4)
-
-    def sampler(self, z, maps=None):
-        with tf.variable_scope("generator") as scope:
-            scope.reuse_variables()
-
-            s_h, s_w = self.output_height, self.output_width
-            s_h2, s_w2 = conv_out_size_same(s_h, 2), conv_out_size_same(s_w, 2)
-            s_h4, s_w4 = conv_out_size_same(s_h2, 2), conv_out_size_same(s_w2, 2)
-            s_h8, s_w8 = conv_out_size_same(s_h4, 2), conv_out_size_same(s_w4, 2)
-            s_h16, s_w16 = conv_out_size_same(s_h8, 2), conv_out_size_same(s_w8, 2)
-
-            # project `z` and reshape
-            h0 = tf.reshape(
-                linear(z, self.gen_input_layer_depth * 8 * s_h16 * s_w16, 'g_h0_lin'),
-                [-1, s_h16, s_w16, self.gen_input_layer_depth * 8])
-            h0 = tf.nn.relu(self.g_bn0(h0, train=False))
-
-            h1 = deconv2d(h0, [self.batch_size, s_h8, s_w8, self.gen_input_layer_depth * 4], name='g_h1')
-            h1 = tf.nn.relu(self.g_bn1(h1, train=False))
-
-            h2 = deconv2d(h1, [self.batch_size, s_h4, s_w4, self.gen_input_layer_depth * 2], name='g_h2')
-            h2 = tf.nn.relu(self.g_bn2(h2, train=False))
-
-            h3 = deconv2d(h2, [self.batch_size, s_h2, s_w2, self.gen_input_layer_depth * 1], name='g_h3')
-            h3 = tf.nn.relu(self.g_bn3(h3, train=False))
-
-            if self.use_maps:
-                h4, self.h4_w, self.h4_b = deconv2d(
-                    h3, [self.batch_size, s_h, s_w, int(self.gen_input_layer_depth * 0.5)], name='g_h4', with_w=True)
-                h4 = tf.nn.relu(h4)
-                h4 = tf.concat([h4, maps], axis=-1)
-
-                h5 = conv2d(
-                    h4, self.c_dim, k_h=3, k_w=3, d_h=1, d_w=1, name='g_h5')
-                return tf.nn.tanh(h5)
-
-            h4, self.h4_w, self.h4_b = deconv2d(
-                h3, [self.batch_size, s_h, s_w, self.c_dim], name='g_h4', with_w=True)
-
-            return tf.nn.tanh(h4)
 
     @property
     def model_dir(self):

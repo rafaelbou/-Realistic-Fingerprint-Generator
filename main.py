@@ -33,16 +33,20 @@ flags.DEFINE_boolean("crop", True, "True for training, False for testing [False]
 flags.DEFINE_boolean("use_masks", False, "Use fingerprint segmentation mask for fingerprint pre process")
 # Mode
 flags.DEFINE_boolean("train", False, "True for training, False for testing [False]")
-flags.DEFINE_boolean("visualize", False, "True for visualizing, False for nothing [False]")
 flags.DEFINE_boolean("use_maps", True, "Use minute maps for fingerprint creation")
-flags.DEFINE_integer("generate_test_images", 100, "Number of images to generate during test. [100]")
+flags.DEFINE_integer("test_sample_num", 100, "Number of images to generate during test. [100]")
+# Model
+flags.DEFINE_string("generator_model_name", "encoder_decoder", "Generator architecture [encoder_decoder, decoder, unet]")
+flags.DEFINE_boolean("use_deconv", False, "Use deconvolution in the generator's decoder. Else using resize+conv")  # TODO: add this to code
+flags.DEFINE_boolean("add_noise_to_discriminator", False, "Add noise to discriminator input.")  # TODO: add this to code
 # Hyper-params
 flags.DEFINE_integer("epoch", 25, "Epoch to train [25]")
 flags.DEFINE_float("learning_rate", 0.0002, "Learning rate of for adam [0.0002]")
 flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
-flags.DEFINE_float("lamda", 10., "Weight for l2 loss")
+flags.DEFINE_float("lamda", 1., "Weight for l2 loss")
 flags.DEFINE_float("train_size", np.inf, "The size of train images [np.inf]")
 flags.DEFINE_integer("batch_size", 4, "The size of batch images [64]")
+flags.DEFINE_integer("noise_dim", 100, "The size of noise vector")
 FLAGS = flags.FLAGS
 
 
@@ -65,7 +69,7 @@ def main(_):
 
     run_config = tf.ConfigProto()
     # run_config.gpu_options.allow_growth = True
-    run_config.gpu_options.per_process_gpu_memory_fraction = 0.5
+    run_config.gpu_options.per_process_gpu_memory_fraction = 0.3
 
     with tf.Session(config=run_config) as sess:
         dcgan = DCGAN(
@@ -76,7 +80,7 @@ def main(_):
             output_height=FLAGS.output_height,
             batch_size=FLAGS.batch_size,
             sample_num=FLAGS.batch_size,
-            z_dim=FLAGS.generate_test_images,
+            z_dim=FLAGS.noise_dim,
             dataset_name=FLAGS.dataset,
             dataset_images_name=FLAGS.dataset_images,
             dataset_labels_name=FLAGS.dataset_labels,
@@ -90,7 +94,8 @@ def main(_):
             load_samples_mode=load_samples_mode,
             lamda=FLAGS.lamda,
             use_maps_flag=FLAGS.use_maps,
-            use_mask_flag=FLAGS.use_masks)
+            use_mask_flag=FLAGS.use_masks,
+            generator_model_name=FLAGS.generator_model_name)
 
         show_all_variables()
 

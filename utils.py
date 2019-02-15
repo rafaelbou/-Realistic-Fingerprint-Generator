@@ -25,7 +25,10 @@ def show_all_variables():
     slim.model_analyzer.analyze_vars(model_vars, print_info=True)
 
 
-def save_images(images, size, image_path):
+def save_images(images, size, image_path, maps=None):
+    if maps is not None:
+        mnt_img = maps + images[:, :, :]
+        imsave(mnt_img, size, image_path.replace(".png", "_mnt.png"))
     return imsave(inverse_transform(images), size, image_path)
 
 
@@ -82,6 +85,7 @@ def imsave(images, size, path):
 
 
 def visualize(sess, dcgan, config):
+    dcgan.sample_num = config.test_sample_num
     for idx in xrange(config.generate_test_images):
         print(" [*] %d" % idx)
         if dcgan.use_maps:
