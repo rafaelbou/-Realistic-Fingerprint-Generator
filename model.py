@@ -22,7 +22,7 @@ class DCGAN(object):
                  disc_input_layer_depth=8, gen_fc_size=1024, disc_fc_size=1024, dataset_name='default',
                  dataset_images_name='default', dataset_labels_name='default', dataset_masks_name='default',
                  input_fname_pattern='*.jpg', labels_fname_pattern='*.txt', masks_fname_pattern='*.png',
-                 checkpoint_dir=None, data_dir='./data', load_samples_mode='validation', lamda=100.,
+                 checkpoint_dir=None, data_dir='./data', logs_dir='./logs', load_samples_mode='validation', lamda=100.,
                  generator_model_name="encoder_decoder"):
         """
         Args:
@@ -76,6 +76,7 @@ class DCGAN(object):
         self.masks_fname_pattern = masks_fname_pattern
         self.checkpoint_dir = checkpoint_dir
         self.data_dir = data_dir
+        self.logs_dir = logs_dir
         self.load_samples_mode = load_samples_mode
         self.save_inputs = True
         # Read dataset files
@@ -178,7 +179,7 @@ class DCGAN(object):
                                         self.G_sum, self.d_loss_fake_sum, self.g_loss_sum])
         self.d_sum = merge_summary(
             [self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
-        self.writer = SummaryWriter("./logs", self.sess.graph)
+        self.writer = SummaryWriter(self.logs_dir, self.sess.graph)
 
     def train(self, config):
         d_optim, g_optim = self.create_optimizer(config)

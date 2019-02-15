@@ -2,6 +2,7 @@
 Some codes from https://github.com/Newmu/dcgan_code
 """
 from __future__ import division
+import os
 import math
 import json
 import random
@@ -18,6 +19,15 @@ import matplotlib.pyplot as plt
 pp = pprint.PrettyPrinter()
 
 get_stddev = lambda x, k_h, k_w: 1 / math.sqrt(k_w * k_h * x.get_shape()[-1])
+
+
+def print_flags_values(config):
+    lines = ["{}: {}\n".format(flag, config[flag].value) for flag in config]
+    output_dir = config.sample_dir.replace('samples', '')
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    with open(os.path.join(output_dir, 'config.txt'), 'w') as config_output_file:
+        config_output_file.writelines(lines)
 
 
 def show_all_variables():

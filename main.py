@@ -2,15 +2,16 @@ import os
 import numpy as np
 
 from model import DCGAN
-from utils import pp, visualize, show_all_variables
+from utils import pp, visualize, show_all_variables, print_flags_values
 
 import tensorflow as tf
 
 flags = tf.app.flags
 # IO
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
+flags.DEFINE_string("logs_dir", "logs", "Directory name to save the logs [logs]")
 flags.DEFINE_string("data_dir", "./data", "Root directory of dataset [data]")
-flags.DEFINE_string("sample_dir", "samples", "Directory name to save the image samples [samples]")
+flags.DEFINE_string("sample_dir", "../outputs", "Directory name to save the image samples [samples]")
 flags.DEFINE_integer("summary_steps", 100, "write to summery file each summary_steps steps")
 flags.DEFINE_integer("eval_steps", 100, "run evaluation each eval_steps steps")
 flags.DEFINE_integer("save_ckpt_steps", 100, "save checkpoint file each save_ckpt_steps steps")
@@ -52,6 +53,7 @@ FLAGS = flags.FLAGS
 
 def main(_):
     pp.pprint(flags.FLAGS.__flags)
+    print_flags_values(FLAGS)
 
     if FLAGS.input_width is None:
         FLAGS.input_width = FLAGS.input_height
@@ -91,6 +93,7 @@ def main(_):
             crop=FLAGS.crop,
             checkpoint_dir=FLAGS.checkpoint_dir,
             data_dir=FLAGS.data_dir,
+            logs_dir=FLAGS.logs_dir,
             load_samples_mode=load_samples_mode,
             lamda=FLAGS.lamda,
             use_maps_flag=FLAGS.use_maps,

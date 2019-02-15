@@ -6,7 +6,7 @@ def discriminator(dcgan, image, reuse=False):
         if reuse:
             scope.reuse_variables()
 
-        h0 = lrelu(conv2d(image, dcgan.disc_input_layer_depth, name='d_h0_conv'))
+        h0 = lrelu(conv2d(image, dcgan.disc_input_layer_depth, s_h=1, s_w=1, name='d_h0_conv'))
         h1 = lrelu(dcgan.d_bn1(conv2d(h0, dcgan.disc_input_layer_depth * 2, name='d_h1_conv')))
         h2 = lrelu(dcgan.d_bn2(conv2d(h1, dcgan.disc_input_layer_depth * 4, name='d_h2_conv')))
         h3 = lrelu(dcgan.d_bn3(conv2d(h2, dcgan.disc_input_layer_depth * 8, name='d_h3_conv')))
@@ -20,7 +20,7 @@ def discriminator_3_fc(dcgan, image, reuse=False):
         if reuse:
             scope.reuse_variables()
 
-        h0 = lrelu(conv2d(image, dcgan.disc_input_layer_depth, name='d_h0_conv'))
+        h0 = lrelu(conv2d(image, dcgan.disc_input_layer_depth, s_h=1, s_w=1, name='d_h0_conv'))
         h1 = lrelu(dcgan.d_bn1(conv2d(h0, dcgan.disc_input_layer_depth * 2, name='d_h1_conv')))
         h2 = lrelu(dcgan.d_bn2(conv2d(h1, dcgan.disc_input_layer_depth * 4, name='d_h2_conv')))
         h3 = lrelu(dcgan.d_bn3(conv2d(h2, dcgan.disc_input_layer_depth * 8, name='d_h3_conv')))
@@ -31,7 +31,6 @@ def discriminator_3_fc(dcgan, image, reuse=False):
         h8 = linear(h7, 1, 'd_h8_lin')
 
         return tf.nn.sigmoid(h8), h8
-
 
 
 discriminators = {"basline": discriminator,

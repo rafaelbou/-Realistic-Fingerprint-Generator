@@ -83,7 +83,7 @@ class generator:
                 self.d_h6 = tf.nn.relu(self.d_h6)
                 self.d_h6 = tf.concat([self.d_h6, self.maps], axis=-1)
 
-                self.d_h7 = conv2d(self.d_h6, dcgan.c_dim, k_h=3, k_w=3, d_h=1, d_w=1, name='g_h7')
+                self.d_h7 = conv2d(self.d_h6, dcgan.c_dim, k_h=3, k_w=3, s_h=1, s_w=1, name='g_h7')
                 return tf.nn.tanh(self.d_h7)
 
             self.d_h6, _, _ = deconv2d(
@@ -145,7 +145,7 @@ class Unet(generator):
             self.d_h6 = tf.nn.relu(self.d_h6)
             self.d_h6 = tf.concat([self.d_h6, self.maps], axis=-1)
 
-            self.d_h7 = conv2d(self.d_h6, dcgan.c_dim, k_h=3, k_w=3, d_h=1, d_w=1, name='g_h7')
+            self.d_h7 = conv2d(self.d_h6, dcgan.c_dim, k_h=3, k_w=3, s_h=1, s_w=1, name='g_h7')
             return tf.nn.tanh(self.d_h7)
 
 
