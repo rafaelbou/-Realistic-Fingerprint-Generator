@@ -24,7 +24,7 @@ class DCGAN(object):
                  disc_input_layer_depth=64, gen_fc_size=1024, disc_fc_size=1024, dataset_name='default',
                  dataset_images_name='default', dataset_labels_name='default', dataset_masks_name='default',
                  input_fname_pattern='*.jpg', labels_fname_pattern='*.txt', masks_fname_pattern='*.png',
-                 checkpoint_dir=None, data_dir='./data', load_samples_mode='validation', lamda=100.):
+                 output_dir='../outputs', data_dir='./data', load_samples_mode='validation', lamda=100.):
         """
         Args:
           sess: TensorFlow session
@@ -70,9 +70,13 @@ class DCGAN(object):
         self.input_fname_pattern = input_fname_pattern
         self.labels_fname_pattern = labels_fname_pattern
         self.masks_fname_pattern = masks_fname_pattern
-        self.checkpoint_dir = checkpoint_dir
+        self.output_dir = output_dir
+        self.checkpoint_dir = os.path.join(self.output_dir, "checkpoints")
+        self.logs_dir = os.path.join(self.output_dir, "logs")
+        self.sample_dir = os.path.join(self.output_dir, 'samples')
         self.data_dir = data_dir
         self.load_samples_mode = load_samples_mode
+        self.save_inputs = True
         # Read dataset files
         self.read_dataset_files()
         # Build model
@@ -172,7 +176,7 @@ class DCGAN(object):
                                         self.G_sum, self.d_loss_fake_sum, self.g_loss_sum])
         self.d_sum = merge_summary(
             [self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
-        self.writer = SummaryWriter("./logs", self.sess.graph)
+        self.writer = SummaryWriter(self.logs_dir, self.sess.graph)
 
     def train(self, config):
         d_optim, g_optim = self.create_optimizer(config)
@@ -305,13 +309,17 @@ class DCGAN(object):
                             self.inputs: sample_inputs,
                         },
                     )
+                if self.save_inputs:
+                    save_images(sample_inputs, image_manifold_size(samples.shape[0]),
+                                '{}/inputs.png'.format(self.sample_dir))
+                    self.save_inputs = False
                 save_images(samples, image_manifold_size(samples.shape[0]),
-                            './{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
+                            '{}/train_{:02d}_{:04d}.png'.format(self.sample_dir, epoch, idx))
                 print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss))
             except:
                 print("one pic error!...")
         if np.mod(counter, config.save_ckpt_steps) == 0:
-            self.save(config.checkpoint_dir, counter)
+            self.save(self.checkpoint_dir, counter)
 
     def sample_inputs_and_z(self):
         sample_z = np.random.uniform(-1, 1, size=(self.sample_num, self.z_dim))

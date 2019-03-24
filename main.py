@@ -2,15 +2,14 @@ import os
 import numpy as np
 
 from model import DCGAN
-from utils import pp, visualize, show_all_variables
+from utils import pp, visualize, show_all_variables, print_flags_values
 
 import tensorflow as tf
 
 flags = tf.app.flags
 # IO
-flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
+flags.DEFINE_string("output_dir", None, "Directory name to save the outputs (checkpoint, logs, samples)")
 flags.DEFINE_string("data_dir", "./data", "Root directory of dataset [data]")
-flags.DEFINE_string("sample_dir", "samples", "Directory name to save the image samples [samples]")
 flags.DEFINE_integer("summary_steps", 100, "write to summery file each summary_steps steps")
 flags.DEFINE_integer("eval_steps", 100, "run evaluation each eval_steps steps")
 flags.DEFINE_integer("save_ckpt_steps", 100, "save checkpoint file each save_ckpt_steps steps")
@@ -47,8 +46,8 @@ FLAGS = flags.FLAGS
 
 
 def main(_):
-    pp.pprint(flags.FLAGS.__flags)
-
+    # pp.pprint(flags.FLAGS.__flags)
+    print_flags_values(FLAGS)
     if FLAGS.input_width is None:
         FLAGS.input_width = FLAGS.input_height
     if FLAGS.output_width is None:
@@ -58,14 +57,14 @@ def main(_):
     else:
         load_samples_mode = 'test'
 
-    if not os.path.exists(FLAGS.checkpoint_dir):
-        os.makedirs(FLAGS.checkpoint_dir)
-    if not os.path.exists(FLAGS.sample_dir):
-        os.makedirs(FLAGS.sample_dir)
+    if not os.path.exists(os.path.join(FLAGS.output_dir, "checkpoints")):
+        os.makedirs(os.path.join(FLAGS.output_dir, "checkpoints"))
+    if not os.path.exists(os.path.join(FLAGS.output_dir, "samples")):
+        os.makedirs(os.path.join(FLAGS.output_dir, "samples"))
 
     run_config = tf.ConfigProto()
-    # run_config.gpu_options.allow_growth = True
-    run_config.gpu_options.per_process_gpu_memory_fraction = 0.5
+    run_config.gpu_options.allow_growth = True
+    # run_config.gpu_options.per_process_gpu_memory_fraction = 0.5
 
     with tf.Session(config=run_config) as sess:
         dcgan = DCGAN(
@@ -85,7 +84,7 @@ def main(_):
             labels_fname_pattern=FLAGS.labels_fname_pattern,
             masks_fname_pattern=FLAGS.masks_fname_pattern,
             crop=FLAGS.crop,
-            checkpoint_dir=FLAGS.checkpoint_dir,
+            output_dir=FLAGS.output_dir,
             data_dir=FLAGS.data_dir,
             load_samples_mode=load_samples_mode,
             lamda=FLAGS.lamda,
