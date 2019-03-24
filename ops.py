@@ -113,3 +113,14 @@ def linear(input_, output_size, scope=None, stddev=0.02, bias_start=0.0, with_w=
             return tf.matmul(input_, matrix) + bias, matrix, bias
         else:
             return tf.matmul(input_, matrix) + bias
+
+
+def resize_and_conv(input_, output_shape,
+             k_h=3, k_w=3, s_h=1, s_w=1, stddev=0.02,
+             name="conv2d", resize_method_name='nearest_neighbors'):
+    resize_methods = {"nearest_neighbors": tf.image.ResizeMethod.NEAREST_NEIGHBOR,
+                      "bilinear": tf.image.ResizeMethod.BILINEAR,
+                      "bicubic": tf.image.ResizeMethod.BICUBIC}
+    resized_input = tf.image.resize_images(input_, (output_shape[1], output_shape[2]),
+                                           resize_methods[resize_method_name])
+    return conv2d(resized_input, output_shape[-1], k_h, k_w, s_h, s_w, stddev, name)

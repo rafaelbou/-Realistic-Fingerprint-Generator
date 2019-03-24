@@ -22,7 +22,7 @@ class DCGAN(object):
                  disc_input_layer_depth=8, gen_fc_size=1024, disc_fc_size=1024, dataset_name='default',
                  dataset_images_name='default', dataset_labels_name='default', dataset_masks_name='default',
                  input_fname_pattern='*.jpg', labels_fname_pattern='*.txt', masks_fname_pattern='*.png',
-                 checkpoint_dir=None, data_dir='./data', logs_dir='./logs', load_samples_mode='validation', lamda=100.,
+                 checkpoint_dir=None, output_dir='../outputs', data_dir='./data', load_samples_mode='validation', lamda=100.,
                  generator_model_name="encoder_decoder"):
         """
         Args:
@@ -74,9 +74,14 @@ class DCGAN(object):
         self.input_fname_pattern = input_fname_pattern
         self.labels_fname_pattern = labels_fname_pattern
         self.masks_fname_pattern = masks_fname_pattern
-        self.checkpoint_dir = checkpoint_dir
+        self.output_dir = output_dir
+        if checkpoint_dir is None:
+            self.checkpoint_dir = os.path.join(self.output_dir, 'checkpoints')
+        else:
+            self.checkpoint_dir = checkpoint_dir
+        self.logs_dir = os.path.join(self.output_dir, 'logs')
+        self.sample_dir = os.path.join(self.output_dir, 'samples')
         self.data_dir = data_dir
-        self.logs_dir = logs_dir
         self.load_samples_mode = load_samples_mode
         self.save_inputs = True
         # Read dataset files
@@ -129,9 +134,9 @@ class DCGAN(object):
             self.G = generator_factory(self, self.z, generator_name='decoder')
         self.D, self.D_logits = discriminator_factory(self, inputs, reuse=False)
         if self.use_maps:
-            self.sampler = generator_factory(self, self.z, self.maps, reuse=True, generator_name=self.generator_model_name)
+            self.sampler = generator_factory(self, self.z, self.maps, reuse=True, train=False, generator_name=self.generator_model_name)
         else:
-            self.sampler = generator_factory(self, self.z, reuse=True, generator_name='decoder')
+            self.sampler = generator_factory(self, self.z, reuse=True, train=False, generator_name='decoder')
         self.D_, self.D_logits_ = discriminator_factory(self, self.G, reuse=True)
 
         self.d_loss_real = tf.reduce_mean(
@@ -147,9 +152,6 @@ class DCGAN(object):
             self.l2_g_loss = l2_loss_weighted(self.G, inputs, tf.math.add(weights, tf.ones_like(weights)))
             self.g_loss = self.g_loss + self.lamda * self.l2_g_loss
 
-        # add summary
-        self.add_summary()
-
         # create var lists
         t_vars = tf.trainable_variables()
         self.d_vars = [var for var in t_vars if 'd_' in var.name]
@@ -159,6 +161,7 @@ class DCGAN(object):
         self.saver = tf.train.Saver()
 
     def add_summary(self):
+        self.learning_rate_sum = scalar_summary("learning_rate", self.learning_rate)
         self.d_loss_real_sum = scalar_summary("d_loss_real", self.d_loss_real)
         self.d_loss_fake_sum = scalar_summary("d_loss_fake", self.d_loss_fake)
         self.g_loss_sum = scalar_summary("g_loss", self.g_loss)
@@ -173,16 +176,20 @@ class DCGAN(object):
             self.inputs_sum = image_summary("G", self.inputs)
             self.g_sum = merge_summary([self.z_sum, self.d__sum,
                                         self.G_sum, self.mnt_sum, self.inputs_sum, self.d_loss_fake_sum,
-                                        self.g_loss_sum, self.g_l2_loss_sum])
+                                        self.g_loss_sum, self.g_l2_loss_sum, self.learning_rate_sum])
         else:
             self.g_sum = merge_summary([self.z_sum, self.d__sum,
-                                        self.G_sum, self.d_loss_fake_sum, self.g_loss_sum])
+                                        self.G_sum, self.d_loss_fake_sum, self.g_loss_sum, self.learning_rate_sum])
         self.d_sum = merge_summary(
-            [self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
+            [self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum, self.learning_rate_sum])
         self.writer = SummaryWriter(self.logs_dir, self.sess.graph)
 
     def train(self, config):
         d_optim, g_optim = self.create_optimizer(config)
+
+        # add summary
+        self.add_summary()
+
         try:
             tf.global_variables_initializer().run()
         except:
@@ -314,12 +321,12 @@ class DCGAN(object):
                     )
                 if self.save_inputs:
                     save_images(sample_inputs, image_manifold_size(samples.shape[0]),
-                                './{}/inputs.png'.format(config.sample_dir, epoch, idx))
+                                './{}/inputs.png'.format(self.sample_dir, epoch, idx))
                     self.save_inputs = False
                 if not self.use_maps:
                     sample_maps = None
                 save_images(samples, image_manifold_size(samples.shape[0]),
-                            './{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx), maps=sample_maps)
+                            './{}/train_{:02d}_{:04d}.png'.format(self.sample_dir, epoch, idx), maps=sample_maps)
                 print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss))
             except:
                 print("one pic error!...")
@@ -364,10 +371,18 @@ class DCGAN(object):
         return sample_inputs, sample_z
 
     def create_optimizer(self, config):
-        d_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
-            .minimize(self.d_loss, var_list=self.d_vars)
-        g_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
-            .minimize(self.g_loss, var_list=self.g_vars)
+        global_step = tf.train.create_global_step()
+        # self.learning_rate = tf.constant(1, dtype=tf.float32)
+        self.learning_rate = tf.train.exponential_decay(config.learning_rate, global_step,
+                                                        6500 * 3, 0.9, staircase=True)
+        # d_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
+        #     .minimize(self.d_loss, var_list=self.d_vars)
+        # g_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
+        #     .minimize(self.g_loss, var_list=self.g_vars)
+        d_optim = tf.train.AdamOptimizer(self.learning_rate, beta1=config.beta1) \
+            .minimize(self.d_loss, var_list=self.d_vars, global_step=global_step)
+        g_optim = tf.train.AdamOptimizer(self.learning_rate, beta1=config.beta1) \
+            .minimize(self.g_loss, var_list=self.g_vars, global_step=global_step)
         return d_optim, g_optim
 
     @property

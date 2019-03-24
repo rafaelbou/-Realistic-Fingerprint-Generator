@@ -8,10 +8,9 @@ import tensorflow as tf
 
 flags = tf.app.flags
 # IO
-flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
-flags.DEFINE_string("logs_dir", "logs", "Directory name to save the logs [logs]")
+flags.DEFINE_string("output_dir", None, "Directory name to save the outputs (checkpoint, logs, samples)")
+flags.DEFINE_string("checkpoint_dir", None, "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_string("data_dir", "./data", "Root directory of dataset [data]")
-flags.DEFINE_string("sample_dir", "../outputs", "Directory name to save the image samples [samples]")
 flags.DEFINE_integer("summary_steps", 100, "write to summery file each summary_steps steps")
 flags.DEFINE_integer("eval_steps", 100, "run evaluation each eval_steps steps")
 flags.DEFINE_integer("save_ckpt_steps", 100, "save checkpoint file each save_ckpt_steps steps")
@@ -37,7 +36,8 @@ flags.DEFINE_boolean("train", False, "True for training, False for testing [Fals
 flags.DEFINE_boolean("use_maps", True, "Use minute maps for fingerprint creation")
 flags.DEFINE_integer("test_sample_num", 100, "Number of images to generate during test. [100]")
 # Model
-flags.DEFINE_string("generator_model_name", "encoder_decoder", "Generator architecture [encoder_decoder, decoder, unet]")
+flags.DEFINE_string("generator_model_name", "encoder_decoder", "Generator architecture"
+                                                               "[encoder_decoder, decoder, unet, resize_and_conv]")
 flags.DEFINE_boolean("use_deconv", False, "Use deconvolution in the generator's decoder. Else using resize+conv")  # TODO: add this to code
 flags.DEFINE_boolean("add_noise_to_discriminator", False, "Add noise to discriminator input.")  # TODO: add this to code
 # Hyper-params
@@ -52,7 +52,7 @@ FLAGS = flags.FLAGS
 
 
 def main(_):
-    pp.pprint(flags.FLAGS.__flags)
+    # pp.pprint(flags.FLAGS.__flags)
     print_flags_values(FLAGS)
 
     if FLAGS.input_width is None:
@@ -66,12 +66,12 @@ def main(_):
 
     if not os.path.exists(FLAGS.checkpoint_dir):
         os.makedirs(FLAGS.checkpoint_dir)
-    if not os.path.exists(FLAGS.sample_dir):
-        os.makedirs(FLAGS.sample_dir)
+    if not os.path.exists(os.path.join(FLAGS.output_dir, "samples")):
+        os.makedirs(os.path.join(FLAGS.output_dir, "samples"))
 
     run_config = tf.ConfigProto()
     # run_config.gpu_options.allow_growth = True
-    run_config.gpu_options.per_process_gpu_memory_fraction = 0.3
+    run_config.gpu_options.per_process_gpu_memory_fraction = 0.5
 
     with tf.Session(config=run_config) as sess:
         dcgan = DCGAN(
@@ -92,8 +92,8 @@ def main(_):
             masks_fname_pattern=FLAGS.masks_fname_pattern,
             crop=FLAGS.crop,
             checkpoint_dir=FLAGS.checkpoint_dir,
+            output_dir=FLAGS.output_dir,
             data_dir=FLAGS.data_dir,
-            logs_dir=FLAGS.logs_dir,
             load_samples_mode=load_samples_mode,
             lamda=FLAGS.lamda,
             use_maps_flag=FLAGS.use_maps,
