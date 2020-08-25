@@ -17,7 +17,7 @@ Tensorflow implementation of realistic fingerprint generator based on DCGAN [Dee
 - Move to "./data" folder
 
 #### For testing:
-- Download [Pre trained model](https://drive.google.com/open?id=1f1UN0igkgq8FUi-vQBCbOS1WT0av7-Vp)
+- Download [Pre trained model](https://drive.google.com/drive/folders/1Ru6YL_5Wvo1sGR-YK-c0FNlLtbln19Vb?usp=sharing)
 - Extract checkpoint folder to the main root (under "-Realistic-Fingerprint-Generator").
 
 ## Usage
